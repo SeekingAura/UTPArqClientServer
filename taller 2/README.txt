@@ -1,0 +1,1 @@
+Servidor medio el cual por 1 socket servidor estará esperando conexiones de los servicios de multiplicación, división, suma cuando estos conecten enviarán puerto,operación donde puerto es el número de puerto donde escucharan al servidor y operación es la operación que realizaran

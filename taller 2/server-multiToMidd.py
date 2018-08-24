@@ -24,16 +24,17 @@ class TCPSocketServer:
 		self.ip=ip
 		self.puerto=puerto
 		# ipvalue=socket.gethostname()
-		# self.sock.bind((ip, puerto))
+		self.sock.bind((ip, puerto))
 		# print("ip value -> ", ipvalue)
 		# Escuchando conexiones entrantes
-		# self.sock.listen(10)
+		self.sock.listen(10)
 		self.sock.settimeout(30)#Establecer tiempo limite de espera en segundos por cada recvfrom
 		self.clients=[]
 		self.idIterator=0
 
 		#Tkinter
 		self.root = tkinter.Tk()
+		self.titleWindow="calculo-server-Multi"
 		self.root.wm_title("calculo-server-Multi")
 		scrollbar = tkinter.Scrollbar(self.root, orient=tkinter.VERTICAL)
 		self.TextoBox = tkinter.Text(self.root, height=8, width=80, yscrollcommand=scrollbar.set)
@@ -48,14 +49,17 @@ class TCPSocketServer:
 		frame = tkinter.Frame(self.root)
 		frame.pack()
 
-		self.list = tkinter.Listbox(self.root, selectmode=tkinter.SINGLE, yscrollcommand=scrollbar.set)
-		self.list.pack(fill=tkinter.BOTH, expand=1)
+		self.command = tkinter.StringVar()
+		tkinter.Entry(frame, textvariable=self.command).grid(row=2, column=1)
 
-		self.buttonShowFile = tkinter.Button(frame, text='Wait new', command=self.waitNew)
-		self.buttonShowFile.grid(row=2, columnspan=1)
+		# self.list = tkinter.Listbox(self.root, selectmode=tkinter.SINGLE, yscrollcommand=scrollbar.set)
+		# self.list.pack(fill=tkinter.BOTH, expand=1)
 
-		self.buttonUpdate = tkinter.Button(frame, text='Update List', command=self.updateListBox)
-		self.buttonUpdate.grid(row=3, columnspan=1)
+		self.buttonConecctServer = tkinter.Button(frame, text='Connect to Server', command=self.createConecction)
+		self.buttonConecctServer.grid(row=2, columnspan=1)
+
+		#self.buttonUpdate = tkinter.Button(frame, text='Update List', command=self.updateListBox)
+		#self.buttonUpdate.grid(row=3, columnspan=1)
 
 		# self.buttonUpdate.config(state=tkinter.DISABLED)
 
@@ -67,7 +71,7 @@ class TCPSocketServer:
 	def yview(self, *args):
 		self.TextoBox.yview(*args)
 		self.TextoBox2.yview(*args)
-		self.list.yview(*args)
+		# self.list.yview(*args)
 
 	def printBox1(self, value):
 		self.TextoBox.config(state=tkinter.NORMAL)
@@ -88,80 +92,111 @@ class TCPSocketServer:
 		self.TextoBox2.config(state=tkinter.DISABLED)
 		"""
 
-	def showInfo(self):
-		fileSelected=self.list.curselection()
-		if(len(fileSelected)==1):
-			fileName=self.list.get(fileSelected[0])
+	#Can sock connection or sock
+	def sendMsg(self, message, sock, to="", trys=50):
+		trysCount=0
+		while trysCount<trys:
+			try:
+				self.printBox1("enviado mensaje={}, to={}".format(message, to))
+				sock.sendall(str(message).encode("utf-8"))
+				return True
+			except socket.timeout:
+				print("tiempo superado de envio message={}, to={}, try#={}".format(message, to, trysCount))
+			except:
+				print("Error al enviar mensaje={}, to={}".format(message, to))
+				return False
+			trysCount+=1
 
-	def sendMsg(self, message, addres):
-		if isinstance(message, str):
-			self.sock.sendto(message.encode('utf-8'), addres)
-		elif isinstance(message, bytes):
-			self.sock.sendto(message, addres)
-		else:
-			print("ERROR - Data type to send can't work")
-			return None
+	
 
-	def recieveMsg(self, size):
-		try:
-			data, addr = self.sock.recvfrom(size)
-			return (data.decode('utf-8'), addr)
-		except socket.timeout:
-			return (None, None)
+	def recvMsg(self, sock, to="", bytesBuffer=1024,trys=50):
+		trysCount=0
+		while trysCount<trys:
+			try:
+				received=sock.recv(bytesBuffer).decode("utf-8")
+				self.printBox1("reciviendo message={}, from={}".format(received, to))
+				return received
+			except socket.timeout:
+				print("tiempo superado de recibido to={}, try#={}".format(to, trysCount))
+			except:
+				print("Error al recibir to={}".format(to))
+				return None
+			trysCount+=1
 
-	def updateListBox(self):
-		self.printBox1("Actualizando lista de servers")
-		listaTemp=self.clients
-		self.list.delete(0, tkinter.END)#Borra TODO
-		for i in listaTemp:
-			self.list.insert(tkinter.END, i)
+	# def updateListBox(self):
+	# 	self.printBox1("Actualizando lista de servers")
+	# 	listaTemp=self.clients
+	# 	self.list.delete(0, tkinter.END)#Borra TODO
+	# 	for i in listaTemp:
+	# 		self.list.insert(tkinter.END, i)
 
-	def waitNew(self):
+	def createConecction(self):
 		self.printBox1("Conectando a server")
-		hilo1=threading.Thread(target=self.runConecctions)
+		self.answer.set("Coneccting...")
+		message=self.command.get()
+		try:
+			ipServer, puertoServer=message.split(", ")
+			puertoServer=int(puertoServer)
+		except:
+			self.printBox1("Conexión fallida")
+			self.printBox1("Formato mal escrito, se esperaba formato ###.###.###.###, #####")
+			self.answer.set("Ready")
+			return
+		self.command.set("")
+		hilo1=threading.Thread(target=self.runConecctions, args=([ipServer, puertoServer]))
 		self.idIterator+=1
 		hilo1.start()
-	def runConecctions(self):
-		ipServer = input("Ingrese la ip del server intermedio -> ")
-		puertoServer = int(input("ingrese el puerto del server intermedio -> "))
+
+	def runConecctions(self, ipServer, puertoServer):
 		# self.sock.connect((self.ip, self.puerto))
-		self.sock.connect((ipServer, puertoServer))
-		
+		sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		try:
-			data = self.sock.recv(19).decode("utf-8")
-			# self.wm_title+=" - "+data
-			# self.root.wm_title(self.wm_title)
-			self.sock.sendall("*".encode("utf-8"))
+			sock.connect((ipServer, puertoServer))
 		except:
-			print("Failed conecction")
+			print("fallo al conectar")
 			return
+		self.answer.set("Setting ID")
+		data = self.recvMsg(sock, to=str((ipServer, puertoServer)))
+		self.root.wm_title(self.titleWindow+" - "+data)
+		self.answer.set("Sending Who am i")
+		self.sendMsg("*", sock, to=str((ipServer, puertoServer)))
+
+		data = self.recvMsg(sock, to=str((ipServer, puertoServer)))
+		self.printBox2("ip recibida -> {}".format(data))
+		self.sendMsg(str(self.puerto), sock, to=str((ipServer, puertoServer)))
+		self.answer.set("Waiting for conecction server")
 		# Recibe los datos en trozos y reetransmite
+		try:
+			connection, client_address = self.sock.accept()
+			self.printBox1("Conectado a servidor")
+		except:
+			self.answer.set("Ready")
+			self.printBox1("ERROR cuando conectó el middleware")
+			return
+		self.answer.set("Ready")
 		while True:
-			try:
-				data = self.sock.recv(19).decode("utf-8")
-			except socket.timeout:
-				self.printBox1("esperando nuevamente")
-				continue
-			except:
+			data = self.recvMsg(connection, to=str(client_address))
+
+			if(data is None):
 				# self.clients.remove(client_address)
 				# self.printBox1("Se ha cerrado id={}, address={}".format(id, client_address))
 				# self.updateListBox()
-				print("FATAL")
+				self.printBox1("Error de conexión con el server={}, cerrando".format(client_address))
 				break
+			
 			op=None
 			op1=None
 			op2=None
+
 			self.printBox1("recibido -> {}".format(data))
 			try:
 				op, op1, op2=str(data).split(",")
 				self.printBox2("operacion {}, op1 {}, op2 {}".format(op, op1, op2))
 				result=eval_binary_expr(int(op1), op, int(op2))
 				self.printBox2("resultado -> {}".format(result))
-				self.printBox1("Enviando resultado={} toAddress{}".format(result, (ipServer, puertoServer)))
-				self.sock.sendall(str(result).encode("utf-8"))
+				self.sendMsg(str(result), connection, to=str(client_address))
 			except:
-				self.printBox1("Error id={}, address={}".format(id, (ipServer, puertoServer)))
-				self.sock.sendall("Error".encode("utf-8"))
+				self.sendMsg("Error", connection, to=str(client_address))
 	def runGraph(self):
 		self.root.mainloop()
 

@@ -28,13 +28,13 @@ class TCPSocketServer:
 		# print("ip value -> ", ipvalue)
 		# Escuchando conexiones entrantes
 		self.sock.listen(10)
-		# self.sock.settimeout(30)#Establecer tiempo limite de espera en segundos por cada recvfrom
-		self.clients=[]
+		self.sock.settimeout(9)#Establecer tiempo limite de espera en segundos por cada recvfrom
+		self.clients={}
 		self.idIterator=0
 
 		#Tkinter
 		self.root = tkinter.Tk()
-		self.root.wm_title("calculo-server")
+		self.root.wm_title("calculo-server-Middleware")
 		scrollbar = tkinter.Scrollbar(self.root, orient=tkinter.VERTICAL)
 		self.TextoBox = tkinter.Text(self.root, height=8, width=80, yscrollcommand=scrollbar.set)
 		self.TextoBox2 = tkinter.Text(self.root, height=8, width=80, yscrollcommand=scrollbar.set)
@@ -51,8 +51,9 @@ class TCPSocketServer:
 		self.list = tkinter.Listbox(self.root, selectmode=tkinter.SINGLE, yscrollcommand=scrollbar.set)
 		self.list.pack(fill=tkinter.BOTH, expand=1)
 
-		self.buttonShowFile = tkinter.Button(frame, text='Wait new', command=self.waitNew)
-		self.buttonShowFile.grid(row=2, columnspan=1)
+
+		self.buttonWaitNew = tkinter.Button(frame, text='Wait new', command=self.waitNew)
+		self.buttonWaitNew.grid(row=2, columnspan=1)
 
 		self.buttonUpdate = tkinter.Button(frame, text='Update List', command=self.updateListBox)
 		self.buttonUpdate.grid(row=3, columnspan=1)
@@ -71,13 +72,13 @@ class TCPSocketServer:
 
 	def printBox1(self, value):
 		self.TextoBox.config(state=tkinter.NORMAL)
-		self.TextoBox.insert(tkinter.END, "\n"+time.asctime(time.localtime(time.time()))+str(value))
+		self.TextoBox.insert(tkinter.END, "\n"+time.asctime(time.localtime(time.time()))+": "+str(value))
 		self.TextoBox.see(tkinter.END)
 		self.TextoBox.config(state=tkinter.DISABLED)
 
 	def printBox2(self, value):
 		self.TextoBox2.config(state=tkinter.NORMAL)
-		self.TextoBox2.insert(tkinter.END, "\n"+time.asctime(time.localtime(time.time()))+str(value))
+		self.TextoBox2.insert(tkinter.END, "\n"+time.asctime(time.localtime(time.time()))+": "+str(value))
 		self.TextoBox2.see(tkinter.END)
 		self.TextoBox2.config(state=tkinter.DISABLED)
 		"""
@@ -114,21 +115,23 @@ class TCPSocketServer:
 		listaTemp=self.clients
 		self.list.delete(0, tkinter.END)#Borra TODO
 		for i in listaTemp:
-			self.list.insert(tkinter.END, i)
+			self.list.insert(tkinter.END, i+" <-> "+str(listaTemp[i]["address"]))
+
 
 	def waitNew(self):
 		self.printBox1("Creando nueva conexion")
-		hilo1=threading.Thread(target=self.runConecctions, args=([self.idIterator]))
+		hilo1=threading.Thread(target=self.runConecction, args=([self.idIterator]))
 		self.idIterator+=1
 		hilo1.start()
-	def runConecctions(self, id):
-		
+		self.buttonWaitNew.after(10000, self.waitNew)
+
+	def runConecction(self, id):
+		whoIs=None
 		self.printBox1("Esperando conexión, id={}".format(id))
 		while True:
 			try:
 				connection, client_address = self.sock.accept()
-				self.clients.append(client_address)
-				# connection.sendall(str(id).encode("utf-8"))
+				connection.sendall(str(id).encode("utf-8"))#definir
 				self.printBox1("conexión lista -> conecction {} addres {}".format(connection, client_address))
 				break
 			except socket.timeout:
@@ -137,18 +140,28 @@ class TCPSocketServer:
 			except:
 				self.printBox1("Cerrado id={}".format(id))
 				return
-			
+			#self.clients
 		self.printBox1('conexion id={} addres={}'.format(id, client_address))
+		self.printBox1("Determinando quien es")
+		try:
+			whoIs = connection.recv(19).decode("utf-8")
+			self.clients[whoIs]={"connection":connection, "address":client_address}
+		except socket.timeout:
+			self.printBox1("cerrada id={}".format(id))
+			return
+		except:
+			self.printBox1("Cerrado id={}".format(id))
+			return
 		self.updateListBox()
 		# Recibe los datos en trozos y reetransmite
-		while True:
+		while whoIs=="cliente":
 			try:
 				data = connection.recv(19).decode("utf-8")
 			except socket.timeout:
 				self.printBox1("esperando nuevamente")
 				continue
 			except:
-				self.clients.remove(client_address)
+				self.clients.pop(whoIs)
 				self.printBox1("Se ha cerrado id={}, address={}".format(id, client_address))
 				self.updateListBox()
 				break
@@ -156,22 +169,33 @@ class TCPSocketServer:
 			op1=None
 			op2=None
 			self.printBox1("recibido -> {}".format(data))
+			correctFormat=False
 			try:
 				op, op1, op2=str(data).split(",")
 				self.printBox2("operacion {}, op1 {}, op2 {}".format(op, op1, op2))
-				result=eval_binary_expr(int(op1), op, int(op2))
+				correctFormat=True
+				#result=eval_binary_expr(int(op1), op, int(op2))
+			except:
+				self.printBox1("Error id={}, address={}".format(id, client_address))
+				connection.sendall("Bad format".encode("utf-8"))
+
+			if(correctFormat):
+				op, op1, op2=str(data).split(",")
+				self.printBox2("operacion {} {} {}".format(op1, op, op2))
+				try:
+					self.clients.get(op).get("connection").sendall(data.encode("utf-8"))
+					result=self.clients.get(op).get("connection").recv(19).decode("utf-8")
+				except:
+					self.printBox1("Se ha cerrado operator={}, address={}".format(op, self.clients.get(op).get("address")))
+					self.clients.pop(op)
+					result="Caido"
+					self.updateListBox()
 				self.printBox2("resultado -> {}".format(result))
 				self.printBox1("Enviando resultado={} toAddress{}".format(result, client_address))
-				connection.sendall(str(result).encode("utf-8"))
-			except:
-				try: 
-					self.printBox1("Error id={}, address={}".format(id, client_address))
-					connection.sendall("Error".encode("utf-8"))
-				except:
-					self.clients.remove(client_address)
-					self.printBox1("Se ha cerrado id={}, address={}".format(id, client_address))
-					self.updateListBox()
-					break
+				connection.sendall(result.encode("utf-8"))
+
+	
+		
 	def runGraph(self):
 		self.root.mainloop()
 

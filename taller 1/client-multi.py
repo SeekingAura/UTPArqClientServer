@@ -91,7 +91,7 @@ class TCPSocketClient:
 			data = self.sock.recv(19).decode("utf-8")
 			self.wm_title+=" - "+data
 			self.root.wm_title(self.wm_title)
-			# self.sock.sendall("cliente".encode("utf-8"))
+			self.sock.sendall("cliente".encode("utf-8"))
 		except:
 			print("Failed conecction")
 			return
@@ -106,7 +106,6 @@ class TCPSocketClient:
 			self.printBox2("Operación -> {}{}{}".format(operator1, operator, operator2))
 		except:
 			self.printBox2("Bad Syntax")
-
 		try:
 			data = self.sock.recv(19).decode("utf-8")
 			self.printBox1("recibido -> {}".format(data))
