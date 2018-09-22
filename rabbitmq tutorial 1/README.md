@@ -181,10 +181,16 @@ listeners.tcp.2 = :::5672
 #### Formato clasico
 ```bash
 [
-	{rabbit, [
-		{tcp_listeners, [{"0.0.0.0", 5672},
-										 {"::",      5672}]}
-	]}
+	{rabbit, 
+		[
+			{tcp_listeners, 
+				[
+					{"0.0.0.0", 5672},
+					{"::",      5672}
+				]
+			}
+		]
+	}
 ].
 ```
 
@@ -260,3 +266,21 @@ sudo python get-pip.py
 sudo python3 get-pip.py
 ```
 Instalará el modulo de pip con el python que sea compilado y ademas agrega de forma automatica a las **variables de entorno** del sistema operativo *pip* y/o *pip3*
+
+---
+
+# RabbitMQ by Pitoval - Tutorial 1 - Hellow World
+Teniendo bien configurado el Rabbitmq ahora podemos poner en funcionamiento el tutorial 1, este tutorial está basado en el que está en la web oficial
+* [Hello World](https://www.rabbitmq.com/tutorials/tutorial-one-python.html)
+
+Este ejemplo es un proceso encargado de "consumir" o tomar los mensajes que envia otro equipo, para ello activavos el proceso de escucha asi
+```bash
+$ sudo python3 receive.py
+```
+
+Estará activo tomando todos los mensajes que se envien a la *queue* hello, en caso de que presente errores en la ejecución verifique si haya configurado el usuario carlosrabbit con contraseña 1234 que se usa con el ejemplo que esa en este repo.
+
+Teniendo activo un proceso de escucha ahora podemos realizar el envio ejecutando
+```bash
+$ sudo python3 send.py
+```

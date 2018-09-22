@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import pika
 
 connection = pika.BlockingConnection(pika.ConnectionParameters(host='192.168.8.247', socket_timeout=2))
@@ -6,7 +6,7 @@ connection = pika.BlockingConnection(pika.ConnectionParameters(host='192.168.8.2
 channel = connection.channel()
 
 
-channel.queue_declare(queue='task_queue', durable=True)
+channel.queue_declare(queue='task_queue', durable=True)#channel with feature durable
 
 import sys
 for i in range(int(sys.argv[1])):
