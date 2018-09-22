@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 import pika
-credentials = pika.credentials.PlainCredentials("seeking", "9924", erase_on_connect=False)
+credentials = pika.credentials.PlainCredentials("carlosrabbit", "1234", erase_on_connect=False)
 
-connection = pika.BlockingConnection(pika.ConnectionParameters(host='10.253.1.9', credentials=credentials, socket_timeout=2))
+connection = pika.BlockingConnection(pika.ConnectionParameters(host='10.253.42.218', credentials=credentials, socket_timeout=2))
 channel = connection.channel()
 
 
