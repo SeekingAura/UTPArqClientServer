@@ -1,0 +1,5 @@
+list messages that send with ACK but area unacknowledged
+    $ sudo rabbitmqctl list_queues name messages_ready messages_unacknowledged
+
+reload rabbit services
+    $ sudo service rabbitmq-server reload

@@ -52,14 +52,14 @@ Es probable que se genere un error en las depedencias (a pesar de haberlas insta
 (Leyendo la base de datos ... 94207 ficheros o directorios instalados actualmente.)
 Preparando para desempaquetar rabbitmq-server_3.7.7-1_all.deb ...
  * Stopping message broker rabbitmq-server
-   ...done.
+	 ...done.
 Desempaquetando rabbitmq-server (3.7.7-1) sobre (3.2.4-1ubuntu0.1) ...
 dpkg: problemas de dependencias impiden la configuración de rabbitmq-server:
  rabbitmq-server depende de erlang-nox (>= 1:19.3) | esl-erlang (>= 1:19.3); sin embargo:
-  La versión de 'erlang-nox' en el sistema es 1:16.b.3-dfsg-1ubuntu2.2.
-  El paquete 'esl-erlang' no está instalado.
+	La versión de 'erlang-nox' en el sistema es 1:16.b.3-dfsg-1ubuntu2.2.
+	El paquete 'esl-erlang' no está instalado.
  rabbitmq-server depende de socat; sin embargo:
-  El paquete 'socat' no está instalado.
+	El paquete 'socat' no está instalado.
 
 dpkg: error al procesar el paquete rabbitmq-server (--install):
  problemas de dependencias - se deja sin configurar
@@ -97,32 +97,32 @@ Leyendo la información de estado... Hecho
 Tal vez quiera ejecutar «apt-get -f install» para corregirlo:
 Los siguientes paquetes tienen dependencias incumplidas:
  erlang : Depende: erlang-dev
-          Depende: erlang-appmon
-          Depende: erlang-common-test
-          Depende: erlang-debugger
-          Depende: erlang-dialyzer
-          Depende: erlang-et
-          Depende: erlang-ftp pero no va a instalarse
-          Depende: erlang-gs
-          Depende: erlang-inviso
-          Depende: erlang-megaco
-          Depende: erlang-observer
-          Depende: erlang-pman
-          Depende: erlang-reltool
-          Depende: erlang-test-server
-          Depende: erlang-tftp pero no va a instalarse
-          Depende: erlang-toolbar
-          Depende: erlang-tv
-          Depende: erlang-typer
-          Depende: erlang-wx
-          Recomienda: erlang-jinterface pero no va a instalarse
-          Recomienda: erlang-ic-java pero no va a instalarse
-          Recomienda: erlang-mode pero no va a instalarse
-          Recomienda: erlang-src pero no va a instalarse
-          Recomienda: erlang-examples pero no va a instalarse
+					Depende: erlang-appmon
+					Depende: erlang-common-test
+					Depende: erlang-debugger
+					Depende: erlang-dialyzer
+					Depende: erlang-et
+					Depende: erlang-ftp pero no va a instalarse
+					Depende: erlang-gs
+					Depende: erlang-inviso
+					Depende: erlang-megaco
+					Depende: erlang-observer
+					Depende: erlang-pman
+					Depende: erlang-reltool
+					Depende: erlang-test-server
+					Depende: erlang-tftp pero no va a instalarse
+					Depende: erlang-toolbar
+					Depende: erlang-tv
+					Depende: erlang-typer
+					Depende: erlang-wx
+					Recomienda: erlang-jinterface pero no va a instalarse
+					Recomienda: erlang-ic-java pero no va a instalarse
+					Recomienda: erlang-mode pero no va a instalarse
+					Recomienda: erlang-src pero no va a instalarse
+					Recomienda: erlang-examples pero no va a instalarse
  rabbitmq-server : Depende: erlang-nox (>= 1:19.3) pero 1:16.b.3-dfsg-1ubuntu2.2 va a ser instalado o
-                            esl-erlang (>= 1:19.3) pero no va a instalarse
-                   Depende: socat pero no va a instalarse
+														esl-erlang (>= 1:19.3) pero no va a instalarse
+									 Depende: socat pero no va a instalarse
 E: Dependencias incumplidas. Intente «apt-get -f install» sin paquetes (o especifique una solución).
 ```
 
@@ -154,6 +154,15 @@ $ sudo chmod a+rwx /etc/rabbitmq
 
 Con permisos totales en este directorio ya se puede acceder, esto solo nos permite manejar de una forma mas "comoda" los archivos de configuración asi como se indica en la [guia oficial](https://www.rabbitmq.com/configure.html), aqui se explicará algunas configuraciones basicas.
 
+Cada que se realice cambio en alguna de las configuraciones para asegurar qeu se hizo una configuración correcta y que este aplique recargamos o reiniciamos el servicio
+```bash
+$ sudo service rabbitmq-server reload
+```
+
+Si todo está correcto se visualizará
+```bash
+ * Restarting message broker rabbitmq-server                             [ OK ] 
+```
 ## Acceso remoto por TCP
 
 Para configurar una conexión remota por **TCP** se debe indicar por cual dirección, parte o interfaz va a establecer la comunicación del servidor con otros clientes o servidores. Una manera sencilla es indicando esta configuración un archivo con nombre *rabbit.tcp_listeners*, se crea el archivo con lo siguiente
@@ -172,10 +181,10 @@ listeners.tcp.2 = :::5672
 #### Formato clasico
 ```bash
 [
-  {rabbit, [
-    {tcp_listeners, [{"0.0.0.0", 5672},
-                     {"::",      5672}]}
-  ]}
+	{rabbit, [
+		{tcp_listeners, [{"0.0.0.0", 5672},
+										 {"::",      5672}]}
+	]}
 ].
 ```
 
@@ -191,6 +200,26 @@ con esto tendremos listo el puerto de escucha, ahora bien muchas de las funcione
 ### Manejo de usuarios de Rabbitmq
 Rabbitmq maneja sus propios usuarios para el uso del servicio, lo cual para ciertas circunstancia será necesario crearlos, modificarlos, eliminarlos, no olvidar que exite la [guia oficial](https://www.rabbitmq.com/rabbitmqctl.8.html) de manejo de usuarios.
 
+RabbitMQ tiene por defecto el usuario *guest* este usuario tiene permisos de todo y por defecto solo se peude usar a nivel de localhost, tambien es el usuario que se usa por defecto cuando no se da uso de credenciales.
+
+El usuario *guest* puede usarse tambien de ofrma remota pero para ello hace falta hacer una breve modificación al archivo **rabbitmq.config** de la siguiente manera
+
+```bash
+sudo nano /etc/rabbitmq/rabbitmq.config
+```
+
+Con el comando anterior editará el archivo **rabbitmq.config** (si no existe lo creará al guardar), y en este archivo se debe agregar
+```bash
+[
+	{rabbit, 
+		[
+			{loopback_users, []
+			}
+		]
+	}
+].
+```
+Sin embargo para uso mas "seguro" del servicio o darle un mejor control de los servicios, log entre otras es bueno dar uso de usuarios (en este repo el tutorial 1 está hecho para autenticarse con usuario)
 #### Crear un usuario
 ```bash
 $ sudo rabbitmqctl add_user $username $password
