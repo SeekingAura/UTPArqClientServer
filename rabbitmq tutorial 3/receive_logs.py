@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import pika
 
-connection = pika.BlockingConnection(pika.ConnectionParameters(host='192.168.8.247'))
+connection = pika.BlockingConnection(pika.ConnectionParameters(host='192.168.0.16'))
 channel = connection.channel()
 
 channel.exchange_declare(exchange='logs',#Create exchange in this case for log
@@ -10,7 +10,7 @@ channel.exchange_declare(exchange='logs',#Create exchange in this case for log
 result = channel.queue_declare(exclusive=True)#create a queue with randon name and exclusive True  erase the quere when the consumer conection is close 
 queue_name = result.method.queue
 
-channel.queue_bind(exchange='logs',
+channel.queue_bind(exchange='logs',##Bind queu to use for exchange, log
                    queue=queue_name)
 
 print(' [*] Waiting for logs. To exit press CTRL+C')

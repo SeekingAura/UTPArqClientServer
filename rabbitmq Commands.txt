@@ -1,3 +1,6 @@
+list bindings
+    $ sudo rabbitmqctl list_bindings
+
 list exchanges
     $ sudo rabbitmqctl list_exchanges
 
