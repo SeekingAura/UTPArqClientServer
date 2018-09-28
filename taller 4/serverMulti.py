@@ -1,28 +1,40 @@
-#!/usr/bin/env python3
+import threading
+import operator
 import sys
 import tkinter as tkinter
 import time
 import pika
 import threading
 
+def get_operator_fn(op):
+	return {
+		'+' : operator.add,
+		'-' : operator.sub,
+		'*' : operator.mul,
+		'/' : operator.truediv,
+		'MOD' : operator.mod,
+		'^' : operator.xor,
+		}[op]
+
+def eval_binary_expr(op1, operator, op2):
+	op1,op2 = int(op1), int(op2)
+	return get_operator_fn(operator)(op1, op2)
 
 
-class rabbitmqClient:
-	def __init__(self, ip="192.168.10.214", name="0"):
+class rabbitmqServer:
+	def __init__(self, ip="localhost"):
 		#rabbitmq
 		self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=ip, socket_timeout=2))
 		self.channel = self.connection.channel()
-		result=self.channel.queue_declare(exclusive=True)
-		self.queue_name = result.method.queue
+		self.channel.queue_declare(queue='*')
 		self.channel.basic_qos(prefetch_count=1)#set number of messages resolve or consume (this case 1 at time)
-		self.channel.basic_consume(self.receive, queue=self.queue_name, no_ack=True)
+		self.channel.basic_consume(self.operationMul, queue='*', no_ack=True)
 
 
 		#Tkinter
-		self.nameClient=name
 		self.root = tkinter.Tk()
-		self.titleWindow="calculo-Cliente"+self.nameClient
-		self.root.wm_title(self.titleWindow)
+		self.titleWindow="calculo-server-Multi"
+		self.root.wm_title("calculo-server-Multi")
 		scrollbar = tkinter.Scrollbar(self.root, orient=tkinter.VERTICAL)
 		self.TextoBox = tkinter.Text(self.root, height=8, width=80, yscrollcommand=scrollbar.set)
 		self.TextoBox2 = tkinter.Text(self.root, height=8, width=80, yscrollcommand=scrollbar.set)
@@ -36,21 +48,14 @@ class rabbitmqClient:
 		frame = tkinter.Frame(self.root)
 		frame.pack()
 
-		self.command = tkinter.StringVar()
-		tkinter.Label(frame, text='operations').grid(row=2, column=0)
-		tkinter.Entry(frame, textvariable=self.command).grid(row=2, column=1)
+		#self.command = tkinter.StringVar()
+		#tkinter.Entry(frame, textvariable=self.command).grid(row=2, column=1)
 
 		# self.list = tkinter.Listbox(self.root, selectmode=tkinter.SINGLE, yscrollcommand=scrollbar.set)
 		# self.list.pack(fill=tkinter.BOTH, expand=1)
 
-		self.buttonSendPlus = tkinter.Button(frame, text='+', command=self.sendMessageSum)
-		self.buttonSendPlus.grid(row=3, column=0)
-		self.buttonSendSub = tkinter.Button(frame, text='-', command=self.sendMessageSub)
-		self.buttonSendSub.grid(row=3, column=1)
-		self.buttonSendMulti = tkinter.Button(frame, text='*', command=self.sendMessageMulti)
-		self.buttonSendMulti.grid(row=4, column=0)
-		self.buttonSendDiv = tkinter.Button(frame, text='/', command=self.sendMessageDiv)
-		self.buttonSendDiv.grid(row=4, column=1)
+		# self.buttonConecctServer = tkinter.Button(frame, text='Start', command=self.runServer)
+		# self.buttonConecctServer.grid(row=2, columnspan=1)
 
 		#self.buttonUpdate = tkinter.Button(frame, text='Update List', command=self.updateListBox)
 		#self.buttonUpdate.grid(row=3, columnspan=1)
@@ -86,57 +91,43 @@ class rabbitmqClient:
 		self.TextoBox2.see(tkinter.END)
 		self.TextoBox2.config(state=tkinter.DISABLED)
 		"""
-	def sendMessageSum(self):
-		self.answer.set("Operating [+]")
-		self.sendMessage("+")
-		self.answer.set("Ready")
-	
-	def sendMessageSub(self):
-		self.answer.set("Operating [-]")
-		self.sendMessage("-")
-		self.answer.set("Ready")
-
-	def sendMessageMulti(self):
-		self.answer.set("Operating [*]")
-		self.sendMessage("*")
-		self.answer.set("Ready")
-	
-	def sendMessageDiv(self):
-		self.answer.set("Operating [/]")
-		self.sendMessage("/")
-		self.answer.set("Ready")
 
 	#Can sock connection or sock
-	def sendMessage(self, op):
-		value=self.command.get()
+	def operationMul(self, channel, method, properties, body):
 		op1=None
 		op2=None
+		body=body.decode("utf-8")
+		self.printBox1("recibido -> {}".format(body))
+		result=None
 		try:
-			op1, op2=value.split(", ")
+			op1, op2=str(body).split(", ")
+			self.printBox2("operacion op1*op2 -> {}*{} ->".format(op1, op2))
+			result=eval_binary_expr(int(op1), "*", int(op2))
+			self.printBox2("resultado -> {}".format(result))
 		except:
-			self.printBox1("Mal formato")
-		if(op1 is not None and op2 is not None):
-			self.command.set("")
-			message=self.queue_name+", "+value
-			self.channel.basic_publish(exchange='', routing_key=op,body=message)
-			self.printBox1("Mensaje enviado {}".format(message))
-			self.printBox2("Operación solicitada -> {}{}{}".format(op1, op, op2))
+			self.printBox1("Error queueClient {}, op1 {}, op2 {}".format(properties.reply_to, op1, op2))
 
-	def runReceive(self):
+		if(properties.reply_to is not None):
+			try:
+				if(op1 is not None and op2 is not None and result is not None):
+					channel.basic_publish(exchange='', routing_key=properties.reply_to, properties=pika.BasicProperties(correlation_id = \
+						properties.correlation_id), body=str(result))
+
+					self.printBox2("enviado -> {}".format(result))
+				else:
+					channel.basic_publish(exchange='', routing_key=properties.reply_to, properties=pika.BasicProperties(correlation_id = \
+						properties.correlation_id), body="-1")
+					self.printBox2("enviado -> {}".format("Error en su formato!"))
+			except:
+				self.printBox1("No fue posible enviar, queue {}".format(properties.reply_to))
+	def runServer(self):
 		self.channel.start_consuming()
 	def runGraph(self):
 		self.root.mainloop()
 
-	def receive(self, ch, method, properties, body):
-		self.printBox1("Mensaje recibido {}".format(body.decode("utf-8")))
-		self.printBox2("resultado {}".format(body.decode("utf-8")))
-
 if __name__ == '__main__':
-	servidor=rabbitmqClient()
-	print("Cliente iniciado")
-	if(len(sys.argv)>1):
-		hilo1=threading.Thread(target=servidor.runReceive, name=sys.argv[1])
-	else:
-		hilo1=threading.Thread(target=servidor.runReceive)
+	servidor=rabbitmqServer()
+	print("Server iniciado")
+	hilo1=threading.Thread(target=servidor.runServer)
 	hilo1.start()
 	servidor.runGraph()

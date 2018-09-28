@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import pika
 
-connection = pika.BlockingConnection(pika.ConnectionParameters(host='192.168.8.247', socket_timeout=2))#the IP is from server
+connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost', socket_timeout=2))#the IP is from server
 channel = connection.channel()
 
 
@@ -13,7 +13,7 @@ def callback(ch, method, properties, body):
 	print(" [x] Received %r" % body)
 	time.sleep(body.count(b'.'))#wait a number of '.' seconds exist, doing more easy to view Round-robin dispatching
 	print(" [x] Done")
-
+channel.basic_qos(prefetch_count=3)
 channel.basic_consume(callback,
 					  queue='hello',
 					  no_ack=True)

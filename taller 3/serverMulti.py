@@ -22,7 +22,7 @@ def eval_binary_expr(op1, operator, op2):
 
 
 class rabbitmqServer:
-	def __init__(self, ip="192.168.8.247"):
+	def __init__(self, ip="192.168.10.214"):
 		#rabbitmq
 		self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=ip, socket_timeout=2))
 		self.channel = self.connection.channel()
@@ -114,7 +114,7 @@ class rabbitmqServer:
 					self.channel.basic_publish(exchange='', routing_key=queueValue, body=op1+"*"+op2+"="+str(result))
 					self.printBox2("enviado -> {}".format(result))
 				else:
-					channel.basic_publish(exchange='', routing_key=queueValue, body="Error en su formato!")
+					self.channel.basic_publish(exchange='', routing_key=queueValue, body="Error en su formato!")
 					self.printBox2("enviado -> {}".format("Error en su formato!"))
 			except:
 				self.printBox1("No fue posible enviar, queue {}".format(queueValue))

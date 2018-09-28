@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import pika
 
-connection = pika.BlockingConnection(pika.ConnectionParameters(host='192.168.8.247', socket_timeout=2))
+connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost', socket_timeout=2))
 
 channel = connection.channel()
 
