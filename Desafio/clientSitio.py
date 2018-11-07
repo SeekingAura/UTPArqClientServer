@@ -42,7 +42,9 @@ class rabbitmqClientSitio:
 		result=self.channel.queue_declare(exclusive=True)#temporal queue
 		self.queueNameMe = result.method.queue
 		self.channel.basic_qos(prefetch_count=1)#set number of messages resolve or consume (this case 1 at time)
-		self.channel.basic_consume(self.receive, queue=self.queueNameMe, no_ack=True)
+		#self.channel.basic_cancel(consumer_tag)
+		#self.channel.queue_delete(queue='name')
+		self.channel.basic_consume(self.receive, queue=self.queueNameMe, no_ack=True, consumer_tag=self.queueNameMe)
 
 		self.queueNameService=None
 
@@ -120,6 +122,9 @@ class rabbitmqClientSitio:
 		self.buttonSetMeta = tkinter.Button(frame, text='Set metadata', command=self.setMeta)
 		self.buttonSetMeta.grid(row=6, column=1, columnspan=1)
 
+		self.buttonUpdateAll = tkinter.Button(frame, text='Update All Files', command=self.updateAll)
+		self.buttonUpdateAll.grid(row=7, column=0, columnspan=1)
+
 		# self.buttonUpdate.config(state=tkinter.DISABLED)
 
 		
@@ -143,19 +148,29 @@ class rabbitmqClientSitio:
 		self.textoBox2.see(tkinter.END)
 		#self.textoBox2.config(state=tkinter.DISABLED)
 		
-	
+	def updateListOrder(self):
+		newList=sorted_d = sorted(key for (key,value) in self.songVotesDictionary.items())
+		return newList
+			
+
+
+
 
 	def updateListBox(self):
-		self.songListDictionary={}
-		for folder in self.folders:
-			self.songListDictionary.update(self.updateDictionary(folder))
-		self.songList=list(self.songListDictionary)
 		self.list.delete(0, tkinter.END)#Borra TODO
 		for song in self.songList:
 			self.list.insert(tkinter.END, song)
 		if(len(self.songList)>0):
 			self.buttonPlayPause.config(state=tkinter.NORMAL)
 			self.buttonStop.config(state=tkinter.NORMAL)
+
+	def updateAll(self):
+		self.songListDictionary={}
+		for folder in self.folders:
+			self.songListDictionary.update(self.updateDictionary(folder))
+		self.songList=list(self.songListDictionary)
+		self.updateListBox()
+		self.printBox1("Se ha actualizado la lista de archivos")
 
 	def updateDictionary(self, folder):
 		filesList=os.listdir(folder)
@@ -217,7 +232,7 @@ class rabbitmqClientSitio:
 			self.printBox2(dataString.replace("[", "").replace("'", "").replace("]", ""))
 			
 			sendDict["duration"]=[self.getMinuteSecond(audio.info.length)]
-			print("audio -<\n ", sendDict)
+			# print("audio -<\n ", sendDict)
 			
 	def setMeta(self):
 		songSelected=self.list.curselection()
@@ -270,6 +285,14 @@ class rabbitmqClientSitio:
 			if(songName is not None):
 				if(songName!=self.stringSongName.get()):
 					self.playerOther(songName)
+					if(self.queueNameService is not None):
+						self.songVotesDictionary=None
+						self.channel.basic_publish(exchange='', routing_kexy=self.queueNameService, body="playingOther")
+						while self.songVotesDictionary is None:
+							self.connection.process_data_events()
+						# self.songList=self.updateListOrder()############
+					
+					# print("hice other")
 					self.stringSongName.set(songName)
 					pygame.mixer.music.load(self.songListDictionary.get(songName))
 					self.songDuration = MP3(self.songListDictionary.get(songName)).info.length
@@ -300,8 +323,15 @@ class rabbitmqClientSitio:
 			pass
 		if(self.playing):
 			if(not pygame.mixer.music.get_busy()):
-				self.channel.basic_publish(exchange='', routing_kexy="conectoSitio", body="playingNext")
-				self.stringSongName.set(self.playerNext())
+				songActual=self.songList[0]
+				if(self.queueNameService is not None):
+					self.songVotesDictionary=None
+					self.channel.basic_publish(exchange='', routing_kexy=self.queueNameService, body="playingNext")
+					while self.songVotesDictionary is None:
+						self.connection.process_data_events()
+					self.songList=self.updateListOrder()
+
+				self.stringSongName.set(self.playerNext(songActual))
 				self.songDuration = MP3(self.songListDictionary.get(self.stringSongName.get())).info.length
 				self.stringDuration.set(self.getMinuteSecond(self.songDuration))
 				pygame.mixer.music.load(self.songListDictionary.get(self.stringSongName.get()))
@@ -318,10 +348,9 @@ class rabbitmqClientSitio:
 		self.buttonPlayPause.after(50, self.player)
 				
 
-	def playerNext(self):
-
-		playingActualSongName=self.songList.pop(0)
-		self.songList.append(playingActualSongName)
+	def playerNext(self, actualSong):
+		self.songList.remove(actualSong)
+		self.songList.append(actualSong)
 		self.updateListBox()
 		return self.songList[0]
 
@@ -332,6 +361,7 @@ class rabbitmqClientSitio:
 		playingNextSongIndex=self.songList.index(playingNextSongName)
 		playingNextSongName=self.songList.pop(playingNextSongIndex)
 		self.songList.insert(0, playingNextSongName)
+		# print("new list", self.songList)
 		self.updateListBox()
 
 
@@ -339,6 +369,7 @@ class rabbitmqClientSitio:
 	def connectReceive(self):
 		self.printBox1("connectando al servicio del medio")
 		self.channel.basic_publish(exchange='', routing_key="conectoSitio", body=self.queueNameMe)
+
 
 		
 
@@ -348,6 +379,7 @@ class rabbitmqClientSitio:
 		self.printBox1("mensaje recibido {}".format(body))
 		if(self.queueNameService is not None):
 			self.queueNameService=body
+			self.printBox1("se ha conectado al servicio del medio")
 		else:
 			self.songVotesDictionary=eval(body)
 
@@ -363,9 +395,10 @@ class rabbitmqClientSitio:
 	
 
 if __name__ == '__main__':
-	servidor=rabbitmqClientSitio()
+	servidor=rabbitmqClientSitio("192.168.9.71")
 	hilo1=threading.Thread(target=servidor.runReceive)
 	hilo1.start()
+
 	print("Server iniciado")
 	servidor.runGraph()
 	os._exit(1)# kill main thread
