@@ -149,7 +149,7 @@ class rabbitmqClientSitio:
 		#self.textoBox2.config(state=tkinter.DISABLED)
 		
 	def updateListOrder(self):
-		newList=sorted_d = sorted(key for (key,value) in self.songVotesDictionary.items())
+		newList=sorted(key for (key,value) in self.songVotesDictionary.items())
 		return newList
 			
 
