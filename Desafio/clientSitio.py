@@ -39,8 +39,8 @@ class rabbitmqClientSitio:
 		#rabbitmq
 		self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=ip, socket_timeout=2))
 		self.channel = self.connection.channel()
-		result=self.channel.queue_declare(queue="amqsitio1")
-		#result=self.channel.queue_declare(exclusive=True)#temporal queue
+		#result=self.channel.queue_declare(queue="amqsitio1")
+		result=self.channel.queue_declare(exclusive=True)#temporal queue
 		self.queueNameMe = result.method.queue
 		# self.channel.basic_qos(prefetch_count=1)#set number of messages resolve or consume (this case 1 at time)
 		#self.channel.basic_cancel(consumer_tag)
@@ -419,19 +419,19 @@ class rabbitmqClientSitio:
 							delivery_mode = 2, # make message persistent, not end until message consumes
 						))
 					startTime = time.perf_counter()
-					while not self.songListNew:
-						self.connection.process_data_events()
+					elapsed=0
+					while(elapsed<1):
+						elapsed = time.perf_counter() - startTime
+						continue
+					#while not self.songListNew:
+					#	self.connection.process_data_events()
 						
 					
-						elapsed = time.perf_counter() - startTime
-						if(elapsed>1):
-							print("TIME OUT")
-							break
-					self.updateListBox()
-					self.songDuration = MP3(self.songListDictionary.get(self.stringSongName.get())).info.length
-					self.stringDuration.set(self.getMinuteSecond(self.songDuration))
-					pygame.mixer.music.load(self.songListDictionary.get(self.stringSongName.get()))
-					pygame.mixer.music.play()
+					#	elapsed = time.perf_counter() - startTime
+					#	if(elapsed>1):
+					#		print("TIME OUT")
+					#		break
+					
 					# self.songList=self.updateListOrder()############
 				else:
 					self.stringSongName.set(self.playerNext(songActual))
@@ -492,8 +492,13 @@ class rabbitmqClientSitio:
 			self.songList=eval(body)
 			print("se ha recibido la lista -> ", self.songList)
 			self.stringSongName.set(self.songList[0])
-			# self.updateListBox()
+			
+			self.songDuration = MP3(self.songListDictionary.get(self.stringSongName.get())).info.length
+			self.stringDuration.set(self.getMinuteSecond(self.songDuration))
+			pygame.mixer.music.load(self.songListDictionary.get(self.stringSongName.get()))
+			pygame.mixer.music.play()
 			self.songListNew=True
+			self.updateListBox()
 		ch.basic_ack(delivery_tag = method.delivery_tag)
 
 	
