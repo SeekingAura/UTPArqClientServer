@@ -39,17 +39,19 @@ class rabbitmqClientSitio:
 		#rabbitmq
 		self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=ip, socket_timeout=2))
 		self.channel = self.connection.channel()
-		result=self.channel.queue_declare(exclusive=True)#temporal queue
+		result=self.channel.queue_declare(queue="amqsitio1")
+		#result=self.channel.queue_declare(exclusive=True)#temporal queue
 		self.queueNameMe = result.method.queue
-		self.channel.basic_qos(prefetch_count=1)#set number of messages resolve or consume (this case 1 at time)
+		# self.channel.basic_qos(prefetch_count=1)#set number of messages resolve or consume (this case 1 at time)
 		#self.channel.basic_cancel(consumer_tag)
 		#self.channel.queue_delete(queue='name')
-		self.channel.basic_consume(self.receive, queue=self.queueNameMe, no_ack=True, consumer_tag=self.queueNameMe)
+		print("mi cola ->", self.queueNameMe)
+		self.channel.basic_consume(self.receive, queue=self.queueNameMe)
 
 		self.queueNameService=None
 
 		#pygame - mixer control
-		pygame.mixer.init(frequency=90000)#set to 48000
+		pygame.mixer.init(frequency=44100)#set to 48000
 		self.songDuration = 0
 		self.playing=False
 		self.pause=False
@@ -57,6 +59,7 @@ class rabbitmqClientSitio:
 		self.modifiedPercentage=0.0
 		self.folders=["songs"]
 		self.songListDictionary={}
+		self.songListNew=False
 		self.songList=list(self.songListDictionary)
 		
 		#Tkinter
@@ -137,19 +140,44 @@ class rabbitmqClientSitio:
 
 	def printBox1(self, value):
 		self.textoBox.config(state=tkinter.NORMAL)
-		self.textoBox.insert(tkinter.END, "\n"+time.asctime(time.localtime(time.time()))+": "+str(value))
+		self.textoBox.insert(tkinter.END, "\n"+time.asctime(time.localtime(time.perf_counter()))+": "+str(value))
 		self.textoBox.see(tkinter.END)
 		self.textoBox.config(state=tkinter.DISABLED)
 
 	def printBox2(self, value):
 		#self.textoBox2.config(state=tkinter.NORMAL)
 		self.textoBox2.delete('1.0', tkinter.END)
+		if(self.queueNameService is not None):
+			self.textoBox2.insert(tkinter.END, str("Codigo: "+self.queueNameService+"\n"))
+		else:
+			self.textoBox2.insert(tkinter.END, str("Codigo: No Code"+"\n"))
 		self.textoBox2.insert(tkinter.END, str(value))
 		self.textoBox2.see(tkinter.END)
 		#self.textoBox2.config(state=tkinter.DISABLED)
 		
 	def updateListOrder(self):
-		newList=sorted(key for (key,value) in self.songVotesDictionary.items())
+		newList=[]
+		maxValue=0
+		for song in self.songVotesDictionary:
+			valueIn=self.songVotesDictionary.get(song)
+			if(valueIn > maxValue):
+				maxValue=valueIn=0
+		newList.append(self.songList[0])
+		self.songVotesDictionary.pop(self.songList[0])
+		while len(self.songVotesDictionary)!=0:
+			newMax=0
+			
+			for song in self.songlist:
+				if(song in self.songVotesDictionary):
+					valueIn=self.songVotesDictionary.get(song)
+				else:
+					continue
+				if(valueIn==maxValue):
+					newList.append(song)
+					self.songVotesDictionary.pop(song)
+				elif(valueIn>newMax):
+					newMax=valueIn
+			maxValue=newMax
 		return newList
 			
 
@@ -158,17 +186,33 @@ class rabbitmqClientSitio:
 
 	def updateListBox(self):
 		self.list.delete(0, tkinter.END)#Borra TODO
+		sendList=[]
 		for song in self.songList:
+			if(self.queueNameService is not None):
+				sendList.append({song:self.getInfoSong(song)})
 			self.list.insert(tkinter.END, song)
 		if(len(self.songList)>0):
 			self.buttonPlayPause.config(state=tkinter.NORMAL)
 			self.buttonStop.config(state=tkinter.NORMAL)
+		
+
+			
 
 	def updateAll(self):
 		self.songListDictionary={}
+		sendList=[]
 		for folder in self.folders:
 			self.songListDictionary.update(self.updateDictionary(folder))
 		self.songList=list(self.songListDictionary)
+		
+		for song in self.songList:
+			if(self.queueNameService is not None):
+				sendList.append({song:self.getInfoSong(song)})
+		if(self.queueNameService is not None):
+			self.channel.basic_publish(exchange='', routing_key=self.queueNameService, body="listaInicial`"+str(sendList), properties=pika.BasicProperties(
+							delivery_mode = 2, # make message persistent, not end until message consumes
+						))
+		
 		self.updateListBox()
 		self.printBox1("Se ha actualizado la lista de archivos")
 
@@ -176,6 +220,8 @@ class rabbitmqClientSitio:
 		filesList=os.listdir(folder)
 		songDictionary={}
 		for fileName in filesList:
+			if(os.path.isdir(fileName)):
+				songDictionary.update(self.updateDictionary(folder+"/"+fileName))
 			if(not ".mp3" in fileName):
 				continue
 			try:
@@ -203,7 +249,40 @@ class rabbitmqClientSitio:
 				else:
 					songDictionary[fileName.replace(".mp3", "")]=folder+"/"+fileName
 		return songDictionary
+
+	def updateListFromServer(self):
+		if(self.queueNameService is not None):
+			# Try here
+			self.songListNew=False
+			self.channel.basic_publish(exchange='', routing_key=self.queueNameService, body="listaActualizada`None", properties=pika.BasicProperties(
+							delivery_mode = 2, # make message persistent, not end until message consumes
+						))
+			startTime = time.perf_counter()
+			#while not self.songListNew:
+			#	self.connection.process_data_events()
+			#	elapsed = time.perf_counter() - startTime
+			#	if(elapsed>0.5):
+			#		break
+			# self.songList=self.updateListOrder()############
+			self.printBox1("Se ha actualizado la lista del servidor")
+			self.updateListBox()
+		self.buttonUpdateAll.after(20000, self.updateListFromServer)
+
 	
+	def getInfoSong(self, songName):
+		dataResult={"title":"", "artist":"" , "album":"", "genre":"", "tracknumber":"", "version":"", "date":"", "composer":"", "lyricist":""}
+		audio = EasyID3(self.songListDictionary.get(songName))
+		
+		for metaInfo in dataResult:
+			if(metaInfo in audio):
+				dataResult[metaInfo]=str(audio[metaInfo])	
+			else:
+				continue
+		audio = MP3(self.songListDictionary.get(songName))
+		dataResult["duration"]=[self.getMinuteSecond(audio.info.length)]
+		return dataResult
+		
+		
 
 	def showInfoSong(self,event):
 		listWigget=event.widget
@@ -224,14 +303,13 @@ class rabbitmqClientSitio:
 					dataString+="\n"	
 
 			dataString+="\n"
-			sendDict=eval(str(audio)).copy()
 			audio = MP3(self.songListDictionary.get(songName))
 			dataString+="Duración: "+self.getMinuteSecond(audio.info.length)+"\n"
 			dataString+="Bitrate: "+str(audio.info.bitrate)+"\n"
 			dataString+="Frecuencia: {}Hz".format(str(audio.info.sample_rate))+"\n"
 			self.printBox2(dataString.replace("[", "").replace("'", "").replace("]", ""))
 			
-			sendDict["duration"]=[self.getMinuteSecond(audio.info.length)]
+
 			# print("audio -<\n ", sendDict)
 			
 	def setMeta(self):
@@ -244,7 +322,7 @@ class rabbitmqClientSitio:
 			audio=EasyID3(self.songListDictionary.get(songName))
 			
 			data=self.textoBox2.get("1.0", tkinter.END).split("\n")
-			title, artists, audio["album"], audio["genre"], audio["tracknumber"], audio["version"], audio["date"], audio["composer"], audio["lyricist"]=data[:9]
+			title, artists, audio["album"], audio["genre"], audio["tracknumber"], audio["version"], audio["date"], audio["composer"], audio["lyricist"]=data[1:9]
 
 			metaDataDict={"title":8, "artist":9, "album":7, "genre":8, "tracknumber":17, "version":9, "date":5, "composer":12, "lyricist":10}
 			for enum, metaInfo in enumerate(metaDataDict):
@@ -286,11 +364,21 @@ class rabbitmqClientSitio:
 				if(songName!=self.stringSongName.get()):
 					self.playerOther(songName)
 					if(self.queueNameService is not None):
-						self.songVotesDictionary=None
-						self.channel.basic_publish(exchange='', routing_kexy=self.queueNameService, body="playingOther")
-						while self.songVotesDictionary is None:
-							self.connection.process_data_events()
+						# Try here
+						self.songListNew=False
+
+						self.channel.basic_publish(exchange='', routing_key=self.queueNameService, body="otro`None", properties=pika.BasicProperties(
+							delivery_mode = 2, # make message persistent, not end until message consumes
+						))
+						startTime = time.perf_counter()
+						#while not self.songListNew:
+						#	self.connection.process_data_events()
+						#	elapsed = time.perf_counter() - startTime
+						#	if(elapsed>0.5):
+						#		print("TIME OUT")
+						#		break
 						# self.songList=self.updateListOrder()############
+						self.updateListBox()
 					
 					# print("hice other")
 					self.stringSongName.set(songName)
@@ -325,17 +413,32 @@ class rabbitmqClientSitio:
 			if(not pygame.mixer.music.get_busy()):
 				songActual=self.songList[0]
 				if(self.queueNameService is not None):
-					self.songVotesDictionary=None
-					self.channel.basic_publish(exchange='', routing_kexy=self.queueNameService, body="playingNext")
-					while self.songVotesDictionary is None:
+					print("oe use siguiente")
+					self.songListNew=False
+					self.channel.basic_publish(exchange='', routing_key=self.queueNameService, body="terminoCancion`None", properties=pika.BasicProperties(
+							delivery_mode = 2, # make message persistent, not end until message consumes
+						))
+					startTime = time.perf_counter()
+					while not self.songListNew:
 						self.connection.process_data_events()
-					self.songList=self.updateListOrder()
-
-				self.stringSongName.set(self.playerNext(songActual))
-				self.songDuration = MP3(self.songListDictionary.get(self.stringSongName.get())).info.length
-				self.stringDuration.set(self.getMinuteSecond(self.songDuration))
-				pygame.mixer.music.load(self.songListDictionary.get(self.stringSongName.get()))
-				pygame.mixer.music.play()
+						
+					
+						elapsed = time.perf_counter() - startTime
+						if(elapsed>1):
+							print("TIME OUT")
+							break
+					self.updateListBox()
+					self.songDuration = MP3(self.songListDictionary.get(self.stringSongName.get())).info.length
+					self.stringDuration.set(self.getMinuteSecond(self.songDuration))
+					pygame.mixer.music.load(self.songListDictionary.get(self.stringSongName.get()))
+					pygame.mixer.music.play()
+					# self.songList=self.updateListOrder()############
+				else:
+					self.stringSongName.set(self.playerNext(songActual))
+					self.songDuration = MP3(self.songListDictionary.get(self.stringSongName.get())).info.length
+					self.stringDuration.set(self.getMinuteSecond(self.songDuration))
+					pygame.mixer.music.load(self.songListDictionary.get(self.stringSongName.get()))
+					pygame.mixer.music.play()
 			
 			self.progressBar.config(state=tkinter.NORMAL)
 			self.progressBar.set((pygame.mixer.music.get_pos()/1000)/self.songDuration)
@@ -368,20 +471,30 @@ class rabbitmqClientSitio:
 	#Can sock connection or sock
 	def connectReceive(self):
 		self.printBox1("connectando al servicio del medio")
-		self.channel.basic_publish(exchange='', routing_key="conectoSitio", body=self.queueNameMe)
+		self.channel.basic_publish(exchange='', routing_key="conectoSitio", body=self.queueNameMe, properties=pika.BasicProperties(
+							delivery_mode = 2, # make message persistent, not end until message consumes
+						))
 
 
-		
 
 
 	def receive(self, ch, method, properties, body):
 		body=body.decode("utf-8")
+		print("se ha recibido ->", body)
 		self.printBox1("mensaje recibido {}".format(body))
-		if(self.queueNameService is not None):
+		if(self.queueNameService is None):
 			self.queueNameService=body
+			self.printBox2("")
 			self.printBox1("se ha conectado al servicio del medio")
 		else:
-			self.songVotesDictionary=eval(body)
+			# self.songVotesDictionary=eval(body)
+			
+			self.songList=eval(body)
+			print("se ha recibido la lista -> ", self.songList)
+			self.stringSongName.set(self.songList[0])
+			# self.updateListBox()
+			self.songListNew=True
+		ch.basic_ack(delivery_tag = method.delivery_tag)
 
 	
 	def runReceive(self):
@@ -390,12 +503,13 @@ class rabbitmqClientSitio:
 	def runGraph(self):
 		self.buttonPlayPause.after(1000, self.player)
 		self.buttonUpdate.after(1000, self.connectReceive)
+		#self.buttonUpdateAll.after(20000, self.updateListFromServer)
 		self.root.mainloop()
 
 	
 
 if __name__ == '__main__':
-	servidor=rabbitmqClientSitio("192.168.9.71")
+	servidor=rabbitmqClientSitio("www.nidal.online")
 	hilo1=threading.Thread(target=servidor.runReceive)
 	hilo1.start()
 
