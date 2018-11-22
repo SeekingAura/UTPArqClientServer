@@ -275,11 +275,16 @@ class rabbitmqClientSitio:
 		
 		for metaInfo in dataResult:
 			if(metaInfo in audio):
-				dataResult[metaInfo]=str(audio[metaInfo])	
+				for enum, insideData in enumerate(audio[metaInfo]):
+					if(len(audio[metaInfo])>1 and enum!=len(audio[metaInfo])-1):
+						dataResult[metaInfo]+=str(insideData)+", "
+					else:
+						dataResult[metaInfo]+=str(insideData)
 			else:
 				continue
 		audio = MP3(self.songListDictionary.get(songName))
-		dataResult["duration"]=[self.getMinuteSecond(audio.info.length)]
+		
+		dataResult["duration"]=self.getMinuteSecond(audio.info.length)
 		return dataResult
 		
 		
