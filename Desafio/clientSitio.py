@@ -294,8 +294,9 @@ class rabbitmqClientSitio:
 			dataString=""
 			audio = EasyID3(self.songListDictionary.get(songName))
 			metadataDict={"title":"Titulo: ", "artist":"Artista: " , "album":"Album: ", "genre":"Género: ", "tracknumber":"Número de pista: ", "version":"Versión: ", "date":"Año: ", "composer":"Compositor: ", "lyricist":"Escritor: "}
+			orderDictionary=["title", "artist", "album", "genre", "tracknumber", "version", "date", "composer", "lyricist"]
 			
-			for metaInfo in metadataDict:
+			for metaInfo in orderDictionary:
 				dataString+=metadataDict.get(metaInfo)
 				if(metaInfo in audio):
 					dataString+=str(audio[metaInfo])+"\n"	
@@ -320,14 +321,15 @@ class rabbitmqClientSitio:
 		if(songName is not None):
 			# dataString=""
 			audio=EasyID3(self.songListDictionary.get(songName))
-			
 			data=self.textoBox2.get("1.0", tkinter.END).split("\n")
-			title, artists, audio["album"], audio["genre"], audio["tracknumber"], audio["version"], audio["date"], audio["composer"], audio["lyricist"]=data[1:9]
+			orderDictionary=["title", "artist", "album", "genre", "tracknumber", "version", "date", "composer", "lyricist"]
+			title, artists, audio["album"], audio["genre"], audio["tracknumber"], audio["version"], audio["date"], audio["composer"], audio["lyricist"]=data[1:10]
+
 
 			metaDataDict={"title":8, "artist":9, "album":7, "genre":8, "tracknumber":17, "version":9, "date":5, "composer":12, "lyricist":10}
-			for enum, metaInfo in enumerate(metaDataDict):
-				if(", " in data[enum]):
-					for indexInfo, info in enumerate(data[enum][metaDataDict.get(metaInfo):].split(", ")):
+			for enum, metaInfo in enumerate(orderDictionary):
+				if(", " in data[enum+1]):
+					for indexInfo, info in enumerate(data[enum+1][metaDataDict.get(metaInfo):].split(", ")):
 						if(indexInfo==0):
 							audio[metaInfo]=info
 						else:
@@ -335,7 +337,7 @@ class rabbitmqClientSitio:
 							values.append(info)
 							audio[metaInfo]=values
 				else:
-					audio[metaInfo]=data[enum][metaDataDict.get(metaInfo):]
+					audio[metaInfo]=data[enum+1][metaDataDict.get(metaInfo):]
 			audio.save()
 			self.printBox1("Se ha actualizado metadata de la canción {}".format(songName))
 			
